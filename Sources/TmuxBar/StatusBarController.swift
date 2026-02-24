@@ -86,11 +86,11 @@ final class StatusBarController: NSObject {
             menu.addItem(noSessions)
         } else {
             for (index, session) in sessions.enumerated() {
-                let label = "\(session.name)  (\(session.windowCount) window\(session.windowCount == 1 ? "" : "s"))"
+                let label = "\(session.name)  (\(session.paneCount) pane\(session.paneCount == 1 ? "" : "s"))"
                 let key = index < 9 ? "\(index + 1)" : ""
                 let item = NSMenuItem(title: label, action: nil, keyEquivalent: "")
                 item.image = coloredDot(color: session.isAttached ? .systemGreen : .tertiaryLabelColor)
-                item.setAccessibilityLabel("\(session.name), \(session.windowCount) windows, \(session.isAttached ? "attached" : "detached")")
+                item.setAccessibilityLabel("\(session.name), \(session.paneCount) panes, \(session.isAttached ? "attached" : "detached")")
 
                 let submenu = NSMenu()
 

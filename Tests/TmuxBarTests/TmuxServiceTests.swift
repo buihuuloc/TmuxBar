@@ -2,19 +2,26 @@ import XCTest
 @testable import TmuxBar
 
 final class TmuxServiceTests: XCTestCase {
-    func testParseSessionsOutput() {
+    func testParseSessionsWithPaneCounts() {
         let output = """
         dev|3|1|1708770000
         staging|1|0|1708770100
         """
-        let sessions = TmuxService.parseSessions(from: output)
+        let paneCounts = ["dev": 5, "staging": 2]
+        let sessions = TmuxService.parseSessions(from: output, paneCounts: paneCounts)
         XCTAssertEqual(sessions.count, 2)
         XCTAssertEqual(sessions[0].name, "dev")
-        XCTAssertEqual(sessions[0].windowCount, 3)
+        XCTAssertEqual(sessions[0].paneCount, 5)
         XCTAssertTrue(sessions[0].isAttached)
         XCTAssertEqual(sessions[1].name, "staging")
-        XCTAssertEqual(sessions[1].windowCount, 1)
+        XCTAssertEqual(sessions[1].paneCount, 2)
         XCTAssertFalse(sessions[1].isAttached)
+    }
+
+    func testParseSessionsDefaultPaneCount() {
+        let output = "dev|1|0|123456"
+        let sessions = TmuxService.parseSessions(from: output)
+        XCTAssertEqual(sessions[0].paneCount, 1)
     }
 
     func testParseEmptyOutput() {
@@ -27,6 +34,24 @@ final class TmuxServiceTests: XCTestCase {
         let sessions = TmuxService.parseSessions(from: output)
         XCTAssertEqual(sessions.count, 1)
         XCTAssertEqual(sessions[0].name, "good")
+    }
+
+    func testCountPanes() {
+        let output = """
+        dev
+        dev
+        dev
+        staging
+        staging
+        """
+        let counts = TmuxService.countPanes(from: output)
+        XCTAssertEqual(counts["dev"], 3)
+        XCTAssertEqual(counts["staging"], 2)
+    }
+
+    func testCountPanesEmpty() {
+        let counts = TmuxService.countPanes(from: "")
+        XCTAssertTrue(counts.isEmpty)
     }
 
     func testTmuxBinaryPath() throws {

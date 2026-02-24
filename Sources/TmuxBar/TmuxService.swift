@@ -38,27 +38,41 @@ enum TmuxService {
             && name.count <= 256
     }
 
-    static func parseSessions(from output: String) -> [TmuxSession] {
+    static func parseSessions(from output: String, paneCounts: [String: Int] = [:]) -> [TmuxSession] {
         output
             .split(separator: "\n", omittingEmptySubsequences: true)
             .compactMap { line -> TmuxSession? in
                 let parts = line.trimmingCharacters(in: .whitespaces).split(separator: "|", maxSplits: 3)
                 guard parts.count == 4,
-                      let windowCount = Int(parts[1]),
                       let attached = Int(parts[2]) else { return nil }
+                let name = String(parts[0])
+                let paneCount = paneCounts[name] ?? 1
                 return TmuxSession(
-                    name: String(parts[0]),
-                    windowCount: windowCount,
+                    name: name,
+                    paneCount: paneCount,
                     isAttached: attached != 0,
                     createdAt: String(parts[3])
                 )
             }
     }
 
+    static func countPanes(from output: String) -> [String: Int] {
+        var counts: [String: Int] = [:]
+        for line in output.split(separator: "\n", omittingEmptySubsequences: true) {
+            let name = line.trimmingCharacters(in: .whitespaces)
+            if !name.isEmpty {
+                counts[name, default: 0] += 1
+            }
+        }
+        return counts
+    }
+
     static func listSessions() -> [TmuxSession] {
         guard let tmux = findTmuxPath() else { return [] }
-        let output = shell(tmux, arguments: ["list-sessions", "-F", sessionFormat])
-        return parseSessions(from: output)
+        let sessionsOutput = shell(tmux, arguments: ["list-sessions", "-F", sessionFormat])
+        let panesOutput = shell(tmux, arguments: ["list-panes", "-a", "-F", "#{session_name}"])
+        let paneCounts = countPanes(from: panesOutput)
+        return parseSessions(from: sessionsOutput, paneCounts: paneCounts)
     }
 
     static func createSession(name: String?) {

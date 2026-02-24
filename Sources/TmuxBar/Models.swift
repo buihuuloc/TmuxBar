@@ -2,7 +2,7 @@ import Foundation
 
 struct TmuxSession: Equatable, Identifiable {
     let name: String
-    let windowCount: Int
+    let paneCount: Int
     let isAttached: Bool
     let createdAt: String
 
@@ -10,6 +10,6 @@ struct TmuxSession: Equatable, Identifiable {
 
     var displayTitle: String {
         let attached = isAttached ? " ●" : ""
-        return "\(name)  (\(windowCount) window\(windowCount == 1 ? "" : "s"))\(attached)"
+        return "\(name)  (\(paneCount) pane\(paneCount == 1 ? "" : "s"))\(attached)"
     }
 }
