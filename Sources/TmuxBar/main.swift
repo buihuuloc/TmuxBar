@@ -4,8 +4,11 @@ let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
 
 class AppDelegate: NSObject, NSApplicationDelegate {
+    var statusBarController: StatusBarController?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
-        print("TmuxBar launched")
+        statusBarController = StatusBarController()
+        statusBarController?.refresh()
     }
 }
 
