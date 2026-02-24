@@ -118,7 +118,7 @@ final class StatusBarController: NSObject {
 
         menu.addItem(NSMenuItem.separator())
 
-        let newSession = NSMenuItem(title: "New Session...", action: #selector(createSession), keyEquivalent: "n")
+        let newSession = NSMenuItem(title: "New Session", action: #selector(createSession), keyEquivalent: "n")
         newSession.target = self
         newSession.image = NSImage(systemSymbolName: "plus.circle", accessibilityDescription: "New Session")
         newSession.image?.size = NSSize(width: 14, height: 14)
@@ -197,30 +197,8 @@ final class StatusBarController: NSObject {
     }
 
     @objc private func createSession() {
-        let alert = NSAlert()
-        alert.messageText = "New Session"
-        alert.informativeText = "Enter a name for the new session (leave blank for auto-named):"
-        alert.addButton(withTitle: "Create")
-        alert.addButton(withTitle: "Cancel")
-
-        let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 250, height: 24))
-        textField.placeholderString = "session-name (optional)"
-        alert.accessoryView = textField
-        alert.window.initialFirstResponder = textField
-
-        if alert.runModal() == .alertFirstButtonReturn {
-            let name = textField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !name.isEmpty && !TmuxService.isValidSessionName(name) {
-                let errAlert = NSAlert()
-                errAlert.messageText = "Invalid Name"
-                errAlert.informativeText = "Session names can only contain letters, numbers, dashes, and underscores."
-                errAlert.alertStyle = .warning
-                errAlert.runModal()
-                return
-            }
-            TmuxService.createSession(name: name.isEmpty ? nil : name)
-            refreshForce()
-        }
+        TmuxService.createSession(name: nil)
+        refreshForce()
     }
 
     @objc private func toggleLaunchAtLogin(_ sender: NSMenuItem) {
