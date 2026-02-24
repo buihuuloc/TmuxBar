@@ -81,21 +81,20 @@ enum TmuxService {
     }
 
     static func attachSession(name: String) {
-        // Dual-layer escaping: AppleScript string context, then shell context
-        let appleScriptSafe = name
+        // Use osascript subprocess instead of NSAppleScript to avoid
+        // Automation permission issues with ad-hoc signed app bundles.
+        // osascript inherits the user's existing TCC permissions.
+        let shellSafeName = name
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
-        let shellSafe = appleScriptSafe
             .replacingOccurrences(of: "'", with: "'\\''")
         let script = """
         tell application "Terminal"
             activate
-            do script "tmux attach -t '\(shellSafe)'"
+            do script "tmux attach -t '\(shellSafeName)'"
         end tell
         """
-        guard let appleScript = NSAppleScript(source: script) else { return }
-        var error: NSDictionary?
-        appleScript.executeAndReturnError(&error)
+        _ = shell("/usr/bin/osascript", arguments: ["-e", script])
     }
 
     @discardableResult
