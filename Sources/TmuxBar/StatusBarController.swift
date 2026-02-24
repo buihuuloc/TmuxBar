@@ -118,13 +118,11 @@ final class StatusBarController: NSObject {
 
         menu.addItem(NSMenuItem.separator())
 
-        let newSession = NSMenuItem(title: "New Session", action: #selector(createUnnamedSession), keyEquivalent: "n")
+        let newSession = NSMenuItem(title: "New Session...", action: #selector(createSession), keyEquivalent: "n")
         newSession.target = self
+        newSession.image = NSImage(systemSymbolName: "plus.circle", accessibilityDescription: "New Session")
+        newSession.image?.size = NSSize(width: 14, height: 14)
         menu.addItem(newSession)
-
-        let newNamedSession = NSMenuItem(title: "New Session...", action: #selector(createNamedSession), keyEquivalent: "N")
-        newNamedSession.target = self
-        menu.addItem(newNamedSession)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -198,20 +196,15 @@ final class StatusBarController: NSObject {
         }
     }
 
-    @objc private func createUnnamedSession() {
-        TmuxService.createSession(name: nil)
-        refreshForce()
-    }
-
-    @objc private func createNamedSession() {
+    @objc private func createSession() {
         let alert = NSAlert()
         alert.messageText = "New Session"
-        alert.informativeText = "Enter a name for the new session:"
+        alert.informativeText = "Enter a name for the new session (leave blank for auto-named):"
         alert.addButton(withTitle: "Create")
         alert.addButton(withTitle: "Cancel")
 
         let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 250, height: 24))
-        textField.placeholderString = "session-name"
+        textField.placeholderString = "session-name (optional)"
         alert.accessoryView = textField
         alert.window.initialFirstResponder = textField
 
