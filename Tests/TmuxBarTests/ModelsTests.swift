@@ -14,4 +14,14 @@ final class ModelsTests: XCTestCase {
         let b = TmuxSession(name: "dev", windowCount: 1, isAttached: false, createdAt: "")
         XCTAssertEqual(a, b)
     }
+
+    func testDisplayTitleSingularWindow() {
+        let session = TmuxSession(name: "dev", windowCount: 1, isAttached: false, createdAt: "")
+        XCTAssertEqual(session.displayTitle, "dev  (1 window)")
+    }
+
+    func testDisplayTitlePluralWindowsAttached() {
+        let session = TmuxSession(name: "dev", windowCount: 3, isAttached: true, createdAt: "")
+        XCTAssertEqual(session.displayTitle, "dev  (3 windows) ●")
+    }
 }

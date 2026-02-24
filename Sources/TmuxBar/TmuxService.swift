@@ -3,16 +3,32 @@ import AppKit
 final class TmuxService {
     static let sessionFormat = "#{session_name}|#{session_windows}|#{session_attached}|#{session_created}"
 
-    static func findTmuxPath() -> String? {
+    private static let cachedTmuxPath: String? = {
         let candidates = ["/opt/homebrew/bin/tmux", "/usr/local/bin/tmux", "/usr/bin/tmux"]
         for path in candidates {
             if FileManager.default.isExecutableFile(atPath: path) {
                 return path
             }
         }
-        let result = shell("/usr/bin/which", arguments: ["tmux"])
-        let path = result.trimmingCharacters(in: .whitespacesAndNewlines)
+        let process = Process()
+        let pipe = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
+        process.arguments = ["tmux"]
+        process.standardOutput = pipe
+        process.standardError = pipe
+        do {
+            try process.run()
+        } catch {
+            return nil
+        }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        let path = (String(data: data, encoding: .utf8) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         return path.isEmpty ? nil : path
+    }()
+
+    static func findTmuxPath() -> String? {
+        cachedTmuxPath
     }
 
     static func parseSessions(from output: String) -> [TmuxSession] {
@@ -58,11 +74,12 @@ final class TmuxService {
     }
 
     static func attachSession(name: String) {
-        let escapedName = name.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+        // Shell-safe: wrap in single quotes, escape embedded single quotes
+        let shellSafeName = name.replacingOccurrences(of: "'", with: "'\\''")
         let script = """
         tell application "Terminal"
             activate
-            do script "tmux attach -t \(escapedName)"
+            do script "tmux attach -t '\(shellSafeName)'"
         end tell
         """
         guard let appleScript = NSAppleScript(source: script) else { return }
@@ -71,7 +88,7 @@ final class TmuxService {
     }
 
     @discardableResult
-    static func shell(_ command: String, arguments: [String] = []) -> String {
+    private static func shell(_ command: String, arguments: [String] = []) -> String {
         let process = Process()
         let pipe = Pipe()
         process.executableURL = URL(fileURLWithPath: command)
@@ -83,11 +100,11 @@ final class TmuxService {
         process.environment = env
         do {
             try process.run()
-            process.waitUntilExit()
         } catch {
             return ""
         }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
         return String(data: data, encoding: .utf8) ?? ""
     }
 }

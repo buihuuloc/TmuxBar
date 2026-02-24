@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 
 final class StatusBarController: NSObject {
     private let statusItem: NSStatusItem
@@ -11,6 +12,10 @@ final class StatusBarController: NSObject {
         updateIcon()
         buildMenu()
         startRefreshTimer()
+    }
+
+    deinit {
+        refreshTimer?.invalidate()
     }
 
     func startRefreshTimer() {
@@ -92,6 +97,11 @@ final class StatusBarController: NSObject {
         refreshItem.target = self
         menu.addItem(refreshItem)
 
+        let launchAtLogin = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin(_:)), keyEquivalent: "")
+        launchAtLogin.target = self
+        launchAtLogin.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        menu.addItem(launchAtLogin)
+
         menu.addItem(NSMenuItem.separator())
 
         let quitItem = NSMenuItem(title: "Quit TmuxBar", action: #selector(quit), keyEquivalent: "q")
@@ -166,6 +176,23 @@ final class StatusBarController: NSObject {
             TmuxService.createSession(name: name.isEmpty ? nil : name)
             refresh()
         }
+    }
+
+    @objc private func toggleLaunchAtLogin(_ sender: NSMenuItem) {
+        do {
+            if SMAppService.mainApp.status == .enabled {
+                try SMAppService.mainApp.unregister()
+            } else {
+                try SMAppService.mainApp.register()
+            }
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "Launch at Login"
+            alert.informativeText = "Failed to update login item: \(error.localizedDescription)"
+            alert.alertStyle = .warning
+            alert.runModal()
+        }
+        refresh()
     }
 
     @objc private func quit() {
