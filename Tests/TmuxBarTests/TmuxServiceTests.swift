@@ -29,8 +29,28 @@ final class TmuxServiceTests: XCTestCase {
         XCTAssertEqual(sessions[0].name, "good")
     }
 
-    func testTmuxBinaryPath() {
-        let path = TmuxService.findTmuxPath()
-        XCTAssertNotNil(path)
+    func testTmuxBinaryPath() throws {
+        try XCTSkipUnless(
+            FileManager.default.isExecutableFile(atPath: "/opt/homebrew/bin/tmux")
+            || FileManager.default.isExecutableFile(atPath: "/usr/local/bin/tmux"),
+            "tmux not installed"
+        )
+        XCTAssertNotNil(TmuxService.findTmuxPath())
+    }
+
+    func testValidSessionNames() {
+        XCTAssertTrue(TmuxService.isValidSessionName("dev"))
+        XCTAssertTrue(TmuxService.isValidSessionName("my-session"))
+        XCTAssertTrue(TmuxService.isValidSessionName("test_123"))
+        XCTAssertTrue(TmuxService.isValidSessionName("A"))
+    }
+
+    func testInvalidSessionNames() {
+        XCTAssertFalse(TmuxService.isValidSessionName(""))
+        XCTAssertFalse(TmuxService.isValidSessionName("has space"))
+        XCTAssertFalse(TmuxService.isValidSessionName("has.dot"))
+        XCTAssertFalse(TmuxService.isValidSessionName("has:colon"))
+        XCTAssertFalse(TmuxService.isValidSessionName("inject\"script"))
+        XCTAssertFalse(TmuxService.isValidSessionName("foo'bar"))
     }
 }

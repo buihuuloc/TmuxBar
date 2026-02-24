@@ -1,6 +1,6 @@
 import AppKit
 
-final class TmuxService {
+enum TmuxService {
     static let sessionFormat = "#{session_name}|#{session_windows}|#{session_attached}|#{session_created}"
 
     private static let cachedTmuxPath: String? = {
@@ -15,7 +15,7 @@ final class TmuxService {
         process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
         process.arguments = ["tmux"]
         process.standardOutput = pipe
-        process.standardError = pipe
+        process.standardError = Pipe()
         do {
             try process.run()
         } catch {
@@ -29,6 +29,13 @@ final class TmuxService {
 
     static func findTmuxPath() -> String? {
         cachedTmuxPath
+    }
+
+    static func isValidSessionName(_ name: String) -> Bool {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+        return !name.isEmpty
+            && name.unicodeScalars.allSatisfy { allowed.contains($0) }
+            && name.count <= 256
     }
 
     static func parseSessions(from output: String) -> [TmuxSession] {
@@ -74,12 +81,16 @@ final class TmuxService {
     }
 
     static func attachSession(name: String) {
-        // Shell-safe: wrap in single quotes, escape embedded single quotes
-        let shellSafeName = name.replacingOccurrences(of: "'", with: "'\\''")
+        // Dual-layer escaping: AppleScript string context, then shell context
+        let appleScriptSafe = name
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        let shellSafe = appleScriptSafe
+            .replacingOccurrences(of: "'", with: "'\\''")
         let script = """
         tell application "Terminal"
             activate
-            do script "tmux attach -t '\(shellSafeName)'"
+            do script "tmux attach -t '\(shellSafe)'"
         end tell
         """
         guard let appleScript = NSAppleScript(source: script) else { return }
@@ -90,11 +101,12 @@ final class TmuxService {
     @discardableResult
     private static func shell(_ command: String, arguments: [String] = []) -> String {
         let process = Process()
-        let pipe = Pipe()
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
         process.executableURL = URL(fileURLWithPath: command)
         process.arguments = arguments
-        process.standardOutput = pipe
-        process.standardError = pipe
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
         var env = ProcessInfo.processInfo.environment
         env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:" + (env["PATH"] ?? "")
         process.environment = env
@@ -103,7 +115,7 @@ final class TmuxService {
         } catch {
             return ""
         }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let data = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
         return String(data: data, encoding: .utf8) ?? ""
     }

@@ -1,6 +1,7 @@
 import AppKit
 import ServiceManagement
 
+@MainActor
 final class StatusBarController: NSObject {
     private let statusItem: NSStatusItem
     private var sessions: [TmuxSession] = []
@@ -20,14 +21,23 @@ final class StatusBarController: NSObject {
 
     func startRefreshTimer() {
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
-            self?.refresh()
+            Task { @MainActor in
+                self?.refresh()
+            }
         }
     }
 
     @objc func refresh() {
-        sessions = TmuxService.listSessions()
-        updateIcon()
-        buildMenu()
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let newSessions = TmuxService.listSessions()
+            await MainActor.run {
+                guard let self = self else { return }
+                guard newSessions != self.sessions else { return }
+                self.sessions = newSessions
+                self.updateIcon()
+                self.buildMenu()
+            }
+        }
     }
 
     private func updateIcon() {
@@ -36,8 +46,23 @@ final class StatusBarController: NSObject {
         image?.size = NSSize(width: 18, height: 18)
         button.image = image
         button.imagePosition = .imageLeft
-        button.title = " \(sessions.count)"
+        button.title = sessions.count > 0 ? " \(sessions.count)" : ""
+        button.setAccessibilityLabel("TmuxBar, \(sessions.count) tmux sessions")
     }
+
+    // MARK: - Colored Status Dot
+
+    private func coloredDot(color: NSColor, size: CGFloat = 8) -> NSImage {
+        let image = NSImage(size: NSSize(width: size, height: size))
+        image.lockFocus()
+        color.setFill()
+        NSBezierPath(ovalIn: NSRect(x: 0, y: 0, width: size, height: size)).fill()
+        image.unlockFocus()
+        image.isTemplate = false
+        return image
+    }
+
+    // MARK: - Menu Construction
 
     private func buildMenu() {
         let menu = NSMenu()
@@ -46,20 +71,30 @@ final class StatusBarController: NSObject {
         let header = NSMenuItem(title: "Tmux Sessions", action: nil, keyEquivalent: "")
         header.isEnabled = false
         let headerFont = NSFont.systemFont(ofSize: 11, weight: .semibold)
-        header.attributedTitle = NSAttributedString(string: "Tmux Sessions", attributes: [.font: headerFont, .foregroundColor: NSColor.secondaryLabelColor])
+        header.attributedTitle = NSAttributedString(string: "TMUX SESSIONS", attributes: [.font: headerFont, .foregroundColor: NSColor.secondaryLabelColor])
         menu.addItem(header)
         menu.addItem(NSMenuItem.separator())
 
         if sessions.isEmpty {
-            let noSessions = NSMenuItem(title: "No sessions running", action: nil, keyEquivalent: "")
+            let noSessions: NSMenuItem
+            if TmuxService.findTmuxPath() == nil {
+                noSessions = NSMenuItem(title: "tmux not found", action: nil, keyEquivalent: "")
+            } else {
+                noSessions = NSMenuItem(title: "No sessions running", action: nil, keyEquivalent: "")
+            }
             noSessions.isEnabled = false
             menu.addItem(noSessions)
         } else {
-            for session in sessions {
-                let item = NSMenuItem(title: session.displayTitle, action: nil, keyEquivalent: "")
+            for (index, session) in sessions.enumerated() {
+                let label = "\(session.name)  (\(session.windowCount) window\(session.windowCount == 1 ? "" : "s"))"
+                let key = index < 9 ? "\(index + 1)" : ""
+                let item = NSMenuItem(title: label, action: nil, keyEquivalent: "")
+                item.image = coloredDot(color: session.isAttached ? .systemGreen : .tertiaryLabelColor)
+                item.setAccessibilityLabel("\(session.name), \(session.windowCount) windows, \(session.isAttached ? "attached" : "detached")")
+
                 let submenu = NSMenu()
 
-                let attachItem = NSMenuItem(title: "Attach", action: #selector(attachSession(_:)), keyEquivalent: "")
+                let attachItem = NSMenuItem(title: "Attach", action: #selector(attachSession(_:)), keyEquivalent: key)
                 attachItem.target = self
                 attachItem.representedObject = session.name
                 submenu.addItem(attachItem)
@@ -93,7 +128,7 @@ final class StatusBarController: NSObject {
 
         menu.addItem(NSMenuItem.separator())
 
-        let refreshItem = NSMenuItem(title: "Refresh", action: #selector(refresh), keyEquivalent: "r")
+        let refreshItem = NSMenuItem(title: "Refresh", action: #selector(refreshManual), keyEquivalent: "r")
         refreshItem.target = self
         menu.addItem(refreshItem)
 
@@ -134,8 +169,16 @@ final class StatusBarController: NSObject {
         if alert.runModal() == .alertFirstButtonReturn {
             let newName = textField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
             if !newName.isEmpty && newName != oldName {
+                if !TmuxService.isValidSessionName(newName) {
+                    let errAlert = NSAlert()
+                    errAlert.messageText = "Invalid Name"
+                    errAlert.informativeText = "Session names can only contain letters, numbers, dashes, and underscores."
+                    errAlert.alertStyle = .warning
+                    errAlert.runModal()
+                    return
+                }
                 TmuxService.renameSession(oldName: oldName, newName: newName)
-                refresh()
+                refreshForce()
             }
         }
     }
@@ -148,15 +191,16 @@ final class StatusBarController: NSObject {
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Kill")
         alert.addButton(withTitle: "Cancel")
+        alert.buttons[0].hasDestructiveAction = true
         if alert.runModal() == .alertFirstButtonReturn {
             TmuxService.killSession(name: name)
-            refresh()
+            refreshForce()
         }
     }
 
     @objc private func createUnnamedSession() {
         TmuxService.createSession(name: nil)
-        refresh()
+        refreshForce()
     }
 
     @objc private func createNamedSession() {
@@ -173,8 +217,16 @@ final class StatusBarController: NSObject {
 
         if alert.runModal() == .alertFirstButtonReturn {
             let name = textField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !name.isEmpty && !TmuxService.isValidSessionName(name) {
+                let errAlert = NSAlert()
+                errAlert.messageText = "Invalid Name"
+                errAlert.informativeText = "Session names can only contain letters, numbers, dashes, and underscores."
+                errAlert.alertStyle = .warning
+                errAlert.runModal()
+                return
+            }
             TmuxService.createSession(name: name.isEmpty ? nil : name)
-            refresh()
+            refreshForce()
         }
     }
 
@@ -192,7 +244,24 @@ final class StatusBarController: NSObject {
             alert.alertStyle = .warning
             alert.runModal()
         }
-        refresh()
+        refreshForce()
+    }
+
+    /// Manual refresh from menu (forces reload even if sessions unchanged)
+    @objc private func refreshManual() {
+        refreshForce()
+    }
+
+    /// Force refresh bypassing equality check
+    private func refreshForce() {
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let newSessions = TmuxService.listSessions()
+            await MainActor.run {
+                self?.sessions = newSessions
+                self?.updateIcon()
+                self?.buildMenu()
+            }
+        }
     }
 
     @objc private func quit() {
