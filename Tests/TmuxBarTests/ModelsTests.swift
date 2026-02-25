@@ -24,4 +24,39 @@ final class ModelsTests: XCTestCase {
         let session = TmuxSession(name: "dev", paneCount: 3, isAttached: true, createdAt: "")
         XCTAssertEqual(session.displayTitle, "dev  (3 panes) ●")
     }
+
+    func testRelativeAgeMinutes() {
+        let epoch = String(Int(Date().timeIntervalSince1970) - 300) // 5 minutes ago
+        let session = TmuxSession(name: "dev", paneCount: 1, isAttached: false, createdAt: epoch)
+        XCTAssertEqual(session.relativeAge, "5m")
+    }
+
+    func testRelativeAgeHours() {
+        let epoch = String(Int(Date().timeIntervalSince1970) - 7200) // 2 hours ago
+        let session = TmuxSession(name: "dev", paneCount: 1, isAttached: false, createdAt: epoch)
+        XCTAssertEqual(session.relativeAge, "2h")
+    }
+
+    func testRelativeAgeDays() {
+        let epoch = String(Int(Date().timeIntervalSince1970) - 259200) // 3 days ago
+        let session = TmuxSession(name: "dev", paneCount: 1, isAttached: false, createdAt: epoch)
+        XCTAssertEqual(session.relativeAge, "3d")
+    }
+
+    func testRelativeAgeUnderOneMinute() {
+        let epoch = String(Int(Date().timeIntervalSince1970) - 30) // 30 seconds ago
+        let session = TmuxSession(name: "dev", paneCount: 1, isAttached: false, createdAt: epoch)
+        XCTAssertEqual(session.relativeAge, "<1m")
+    }
+
+    func testRelativeAgeInvalidCreatedAt() {
+        let session = TmuxSession(name: "dev", paneCount: 1, isAttached: false, createdAt: "not-a-number")
+        XCTAssertEqual(session.relativeAge, "")
+    }
+
+    func testDisplayTitleWithAge() {
+        let epoch = String(Int(Date().timeIntervalSince1970) - 7200)
+        let session = TmuxSession(name: "dev", paneCount: 2, isAttached: true, createdAt: epoch)
+        XCTAssertEqual(session.displayTitle, "dev  (2 panes) · 2h ●")
+    }
 }

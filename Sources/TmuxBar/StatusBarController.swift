@@ -86,7 +86,8 @@ final class StatusBarController: NSObject {
             menu.addItem(noSessions)
         } else {
             for (index, session) in sessions.enumerated() {
-                let label = "\(session.name)  (\(session.paneCount) pane\(session.paneCount == 1 ? "" : "s"))"
+                let age = session.relativeAge.isEmpty ? "" : " · \(session.relativeAge)"
+                let label = "\(session.name)  (\(session.paneCount) pane\(session.paneCount == 1 ? "" : "s"))\(age)"
                 let key = index < 9 ? "\(index + 1)" : ""
                 let item = NSMenuItem(title: label, action: nil, keyEquivalent: "")
                 item.image = coloredDot(color: session.isAttached ? .systemGreen : .tertiaryLabelColor)
